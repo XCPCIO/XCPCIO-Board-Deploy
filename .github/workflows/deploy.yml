@@ -1,0 +1,105 @@
+name: Deploy
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.3.1 # If you're using actions/checkout@v2 you must set persist-credentials to false in most cases for the deployment to work correctly.
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Commit
+        run: |
+          git config --local user.email "lyuzhi.pan@gmail.com"
+          git config --local user.name "Dup4"
+          git submodule update --recursive --remote
+          git add .
+          git commit -m "Update Submodule" -a
+      
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
+      
+      - name: Set up Node.js 14.x
+        uses: actions/setup-node@v1
+        with:
+          node-version: 14
+          registry-url: https://registry.npmjs.org/
+    
+      - name: Get Version ID
+        id: get-version-id
+        run: |
+          cd XCPCIO-Board
+          VERSION_ID=$(cat package.json | grep version | sed 's|  \"version\": \"||g' | sed 's|\",||g')
+          echo "::set-output name=version-id::$(echo $VERSION_ID)"
+          echo $VERSION_ID
+
+      - name: Install and Build 🔧 # This example project is built using npm and outputs the result to the 'build' folder. Replace with the commands required to build your project, or remove this step entirely if your site is pre-built.
+        env:
+          VERSION_ID: ${{ steps.get-version-id.outputs.version-id }}  
+        run: |
+          cd XCPCIO-Board
+          sed -i "s|publicPath: '/'|publicPath: '//cdn.jsdelivr.net/gh/XCPCIO/XCPCIO-Board-Deploy@${{ env.VERSION_ID }}/'|" config.ts
+          sed -i "s|favicon: '/favicon.ico'|favicon: '//cdn.jsdelivr.net/gh/XCPCIO/XCPCIO-Board-Deploy@${{ env.VERSION_ID }}/favicon.ico'|" config.ts
+          sed -i "s|baidu: ''|baidu: '${{ secrets.BAIDU_ANALYTICS_ID }}'|" config.ts
+          cat config.ts
+          yarn
+          yarn build
+
+      - name: Minify HTML Index
+        uses: Dup4/minify-html-action@v9
+        with:
+          src: './XCPCIO-Board/dist/index.html'
+
+      - name: Mkdir Index Dir
+        run: |
+          cd XCPCIO-Board
+          mkdir index_dist
+          cp ./dist/index.html ./index_dist/index.html
+
+      - name: Release All
+        uses: JamesIves/github-pages-deploy-action@3.6.2
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: gh-pages # The branch the action should deploy to.
+          FOLDER: XCPCIO-Board/dist # The folder the action should deploy.
+          CLEAN: true # Automatically remove deleted files from the deploy branch
+
+      - name: Release Index
+        uses: JamesIves/github-pages-deploy-action@3.6.2
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: deploy # The branch the action should deploy to.
+          FOLDER: XCPCIO-Board/index_dist # The folder the action should deploy.
+          CLEAN: true # Automatically remove deleted files from the deploy branch
+
+      - name: Create Release # 创建Release，可以在仓库看到一个个版本
+        id: create_release
+        uses: actions/create-release@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+          VERSION_ID: ${{ steps.get-version-id.outputs.version-id }}
+        with:
+          commitish: gh-pages
+          tag_name: ${{ env.VERSION_ID }}
+          release_name: Release ${{ env.VERSION_ID }}
+          draft: false 
+          prerelease: false #
+
+      - name: Deploy
+        uses: appleboy/ssh-action@master 
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: | 
+            ${{ secrets.SSH_RUN_SCRIPT }}
+
+

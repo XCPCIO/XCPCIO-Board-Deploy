@@ -7,9 +7,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2.3.1 # If you're using actions/checkout@v2 you must set persist-credentials to false in most cases for the deployment to work correctly.
+        uses: actions/checkout@v2
         with:
-          persist-credentials: false
           submodules: true
 
       - name: Commit
@@ -26,10 +25,10 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ github.ref }}
       
-      - name: Set up Node.js 14.x
+      - name: Set up Node.js
         uses: actions/setup-node@v1
         with:
-          node-version: 14
+          node-version: 16
           registry-url: https://registry.npmjs.org/
     
       - name: Get Version ID
@@ -40,7 +39,7 @@ jobs:
           echo "::set-output name=version-id::$(echo $VERSION_ID)"
           echo $VERSION_ID
 
-      - name: Install and Build 🔧 # This example project is built using npm and outputs the result to the 'build' folder. Replace with the commands required to build your project, or remove this step entirely if your site is pre-built.
+      - name: Install and Build 🔧 
         env:
           VERSION_ID: ${{ steps.get-version-id.outputs.version-id }}  
         run: |
@@ -64,22 +63,20 @@ jobs:
           cp ./dist/index.html ./index_dist/index.html
 
       - name: Release All
-        uses: JamesIves/github-pages-deploy-action@3.6.2
+        uses: JamesIves/github-pages-deploy-action@4.1.5
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH: gh-pages # The branch the action should deploy to.
-          FOLDER: XCPCIO-Board/dist # The folder the action should deploy.
-          CLEAN: true # Automatically remove deleted files from the deploy branch
+          branch: gh-pages
+          folder: XCPCIO-Board/dist
+          clean: true
 
       - name: Release Index
-        uses: JamesIves/github-pages-deploy-action@3.6.2
+        uses: JamesIves/github-pages-deploy-action@4.1.5
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH: deploy # The branch the action should deploy to.
-          FOLDER: XCPCIO-Board/index_dist # The folder the action should deploy.
-          CLEAN: true # Automatically remove deleted files from the deploy branch
+          branch: deploy
+          folder: XCPCIO-Board/index_dist
+          clean: true
 
-      - name: Create Release # 创建Release，可以在仓库看到一个个版本
+      - name: Create Release
         id: create_release
         uses: actions/create-release@main
         env:
@@ -90,7 +87,7 @@ jobs:
           tag_name: ${{ env.VERSION_ID }}
           release_name: Release ${{ env.VERSION_ID }}
           draft: false 
-          prerelease: false #
+          prerelease: false 
 
       - name: Deploy
         uses: appleboy/ssh-action@master 
